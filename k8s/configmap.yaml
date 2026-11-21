@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleetcheck-config
+data:
+  config.yml: |
+    interval_s: 30
+    disks: ["/"]
+    # On real nodes point this at the vendor CLI, e.g. "tt-smi -s".
+    accelerator_fixture: /app/examples/devices.json
+    accelerators_expected: 4
+    thresholds:
+      mem_used_pct: {warn: 85, crit: 95}
+      load_per_cpu: {warn: 1.5, crit: 3.0}
+      disk_used_pct: {warn: 80, crit: 90}
+      nic_errors: {warn: 100, crit: 1000}
+      accel_temp_c: {warn: 85, crit: 95}
+      accel_eth_link_errors: {warn: 1, crit: 50}

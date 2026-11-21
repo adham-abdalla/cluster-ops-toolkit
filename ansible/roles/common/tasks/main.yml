@@ -1,0 +1,23 @@
+---
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Kernel settings for accelerator hosts
+  ansible.builtin.template:
+    src: 90-fleet.conf.j2
+    dest: /etc/sysctl.d/90-fleet.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Service account for the agent
+  ansible.builtin.user:
+    name: fleetcheck
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false

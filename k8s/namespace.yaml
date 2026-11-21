@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fleetcheck
+  labels:
+    # hostPath mounts (read-only /proc and /sys) need "privileged" at namespace level;
+    # the container itself runs non-root, read-only, with all capabilities dropped.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: restricted

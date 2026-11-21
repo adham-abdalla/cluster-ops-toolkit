@@ -1,0 +1,10 @@
+---
+# Configure fleet nodes and deploy the fleetcheck agent.
+#   ansible-playbook site.yml --limit accel_n300          # one generation
+#   ansible-playbook site.yml --check --diff              # dry run
+- name: Configure accelerator nodes
+  hosts: fleet
+  become: true
+  roles:
+    - common
+    - fleetcheck

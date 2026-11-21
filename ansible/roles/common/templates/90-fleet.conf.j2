@@ -1,0 +1,4 @@
+# Managed by Ansible (role: common). Local edits will be overwritten.
+{% for key, value in common_sysctl.items() %}
+{{ key }} = {{ value }}
+{% endfor %}

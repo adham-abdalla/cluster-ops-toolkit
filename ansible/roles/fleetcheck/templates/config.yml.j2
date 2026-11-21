@@ -1,0 +1,14 @@
+# Managed by Ansible (role: fleetcheck).
+node_name: {{ inventory_hostname }}
+interval_s: {{ fleetcheck_interval_s }}
+disks: {{ fleetcheck_disks | to_json }}
+{% if fleetcheck_accelerator_cmd %}
+accelerator_cmd: {{ fleetcheck_accelerator_cmd | to_json }}
+{% endif %}
+{% if fleetcheck_accelerator_fixture_src %}
+accelerator_fixture: /etc/fleetcheck/devices.json
+{% endif %}
+{% if fleetcheck_accelerators_expected is not none %}
+accelerators_expected: {{ fleetcheck_accelerators_expected }}
+{% endif %}
+thresholds: {{ fleetcheck_thresholds | to_json }}

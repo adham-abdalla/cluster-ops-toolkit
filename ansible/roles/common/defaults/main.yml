@@ -1,0 +1,10 @@
+---
+common_packages:
+  - python3
+  - python3-yaml
+  - jq
+  - curl
+common_sysctl:
+  vm.swappiness: 10
+  net.core.somaxconn: 4096
+  fs.inotify.max_user_watches: 524288

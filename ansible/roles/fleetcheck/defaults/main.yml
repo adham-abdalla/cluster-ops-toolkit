@@ -1,0 +1,15 @@
+---
+fleetcheck_install_dir: /opt/fleetcheck
+fleetcheck_port: 9105
+fleetcheck_interval_s: 30
+fleetcheck_disks: ["/"]
+fleetcheck_accelerator_cmd: ""
+fleetcheck_accelerator_fixture_src: ""   # local file copied to /etc/fleetcheck/devices.json
+fleetcheck_accelerators_expected: null
+fleetcheck_thresholds:
+  mem_used_pct: {warn: 85, crit: 95}
+  load_per_cpu: {warn: 1.5, crit: 3.0}
+  disk_used_pct: {warn: 80, crit: 90}
+  nic_errors: {warn: 100, crit: 1000}
+  accel_temp_c: {warn: 85, crit: 95}
+  accel_eth_link_errors: {warn: 1, crit: 50}

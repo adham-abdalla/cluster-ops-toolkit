@@ -1,0 +1,8 @@
+{
+  "devices": [
+    {"id": 0, "board": "n300", "temp_c": 61.5, "power_w": 112, "aiclk_mhz": 1000, "eth_link_errors": 0, "status": "ok"},
+    {"id": 1, "board": "n300", "temp_c": 64.0, "power_w": 118, "aiclk_mhz": 1000, "eth_link_errors": 0, "status": "ok"},
+    {"id": 2, "board": "n300", "temp_c": 59.2, "power_w": 105, "aiclk_mhz": 1000, "eth_link_errors": 2, "status": "ok"},
+    {"id": 3, "board": "n300", "temp_c": 62.8, "power_w": 110, "aiclk_mhz": 1000, "eth_link_errors": 0, "status": "ok"}
+  ]
+}

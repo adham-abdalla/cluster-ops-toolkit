@@ -1,0 +1,135 @@
+name: CI/CD
+
+# lint ─► test ─┬─► ansible-deploy (runner as a fleet node, idempotency check)
+#               ├─► container (build, run against host /proc, scrape /metrics)
+#               └─► kubernetes (kind cluster, DaemonSet rollout, drain script) ─► publish (main only)
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/adham-abdalla/fleetcheck
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install ruff ansible-core pyyaml
+      - name: Python lint (ruff)
+        run: ruff check fleetcheck tests
+      - name: Shell lint (shellcheck)
+        run: shellcheck scripts/*.sh
+      - name: Ansible syntax check
+        working-directory: ansible
+        run: ansible-playbook --syntax-check -i ../ci/inventory-local.ini site.yml
+      - name: Kubernetes manifests render
+        run: kubectl kustomize k8s > /tmp/rendered.yaml && grep -c '^kind:' /tmp/rendered.yaml
+
+  test:
+    needs: lint
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ matrix.python }}"}
+      - run: pip install pytest pyyaml
+      - run: python -m pytest -v
+      - name: One-shot check of the CI runner itself
+        run: python -m fleetcheck check --config examples/config.yml || true
+
+  ansible-deploy:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx install ansible-core
+      - name: First run (deploys agent as a systemd service on this runner)
+        working-directory: ansible
+        run: ansible-playbook -i ../ci/inventory-local.ini site.yml
+      - name: Second run must change nothing (idempotency)
+        working-directory: ansible
+        run: |
+          ansible-playbook -i ../ci/inventory-local.ini site.yml | tee /tmp/second.log
+          grep -Eq 'changed=0 +unreachable=0 +failed=0' /tmp/second.log
+      - name: Service is healthy and reports four cards
+        run: |
+          systemctl is-active fleetcheck
+          curl -fsS http://127.0.0.1:9105/status | jq '{node, status, cards: (.facts.accelerators | length)}'
+          test "$(curl -fsS http://127.0.0.1:9105/status | jq '.facts.accelerators | length')" -eq 4
+          curl -fsS http://127.0.0.1:9105/metrics | grep '^fleetcheck_status'
+
+  container:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t fleetcheck:ci .
+      - name: Run against the host's /proc and /sys, read-only, as non-root
+        run: |
+          docker run -d --name fc -p 9105:9105 --read-only \
+            -v /proc:/host/proc:ro -v /sys:/host/sys:ro \
+            fleetcheck:ci serve --config /etc/fleetcheck/config.yml --root /host
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' fc)" = healthy ] && break
+            sleep 2
+          done
+          docker inspect -f '{{.State.Health.Status}}' fc | grep -q healthy
+          curl -fsS http://127.0.0.1:9105/metrics | head -20
+          docker exec fc id -u | grep -qx 65534
+          docker image ls fleetcheck:ci --format 'image size: {{.Size}}'
+      - if: failure()
+        run: docker logs fc
+
+  kubernetes:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+        with: {cluster_name: fleet}
+      - name: Build image and load it into the kind node
+        run: |
+          docker build -t "$IMAGE:latest" .
+          kind load docker-image "$IMAGE:latest" --name fleet
+      - name: Deploy DaemonSet
+        run: |
+          kubectl apply -k k8s
+          kubectl -n fleetcheck rollout status ds/fleetcheck --timeout=180s
+          kubectl -n fleetcheck get pods -o wide
+      - name: Scrape through the Service and run the fleet report
+        run: |
+          kubectl -n fleetcheck port-forward svc/fleetcheck 19105:9105 >/dev/null 2>&1 &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:19105/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:19105/status | jq '{node, status}'
+          echo "127.0.0.1:19105" > /tmp/nodes.txt
+          bash scripts/fleet-report.sh -f /tmp/nodes.txt
+      - if: failure()
+        run: kubectl -n fleetcheck describe pods; kubectl -n fleetcheck logs ds/fleetcheck --tail=50
+
+  publish:
+    needs: [ansible-deploy, container, kubernetes]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        run: |
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${GITHUB_SHA::7}" .
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${GITHUB_SHA::7}"

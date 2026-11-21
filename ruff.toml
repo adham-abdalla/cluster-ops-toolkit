@@ -1,0 +1,8 @@
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "B", "I", "UP", "SIM", "BLE"]
+
+[lint.per-file-ignores]
+"fleetcheck/probes.py" = ["BLE001"]  # deliberate: one failing probe must not stop the others

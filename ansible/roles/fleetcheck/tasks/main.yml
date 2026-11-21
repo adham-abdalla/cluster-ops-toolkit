@@ -1,0 +1,74 @@
+---
+- name: Install directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ fleetcheck_install_dir }}"
+    - /etc/fleetcheck
+
+- name: Copy the agent package
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../fleetcheck/"
+    dest: "{{ fleetcheck_install_dir }}/fleetcheck/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  notify: Restart fleetcheck
+
+- name: Device snapshot for hosts without a vendor CLI (labs, CI)
+  ansible.builtin.copy:
+    src: "{{ fleetcheck_accelerator_fixture_src }}"
+    dest: /etc/fleetcheck/devices.json
+    owner: root
+    group: fleetcheck
+    mode: "0640"
+  when: fleetcheck_accelerator_fixture_src | length > 0
+  notify: Restart fleetcheck
+
+- name: Agent configuration
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: /etc/fleetcheck/config.yml
+    owner: root
+    group: fleetcheck
+    mode: "0640"
+  notify: Restart fleetcheck
+
+- name: Systemd unit
+  ansible.builtin.template:
+    src: fleetcheck.service.j2
+    dest: /etc/systemd/system/fleetcheck.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fleetcheck
+
+- name: Enable and start the agent
+  ansible.builtin.systemd_service:
+    name: fleetcheck
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply pending restarts before the health check
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the agent port
+  ansible.builtin.wait_for:
+    port: "{{ fleetcheck_port }}"
+    host: 127.0.0.1
+    timeout: 30
+
+- name: Agent answers /healthz
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ fleetcheck_port }}/healthz"
+    status_code: 200
+  register: fleetcheck_health
+  retries: 5
+  delay: 2
+  until: fleetcheck_health.status == 200

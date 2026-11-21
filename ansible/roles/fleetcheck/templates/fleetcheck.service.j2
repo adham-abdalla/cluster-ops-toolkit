@@ -1,0 +1,21 @@
+# Managed by Ansible (role: fleetcheck).
+[Unit]
+Description=fleetcheck node health agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fleetcheck
+Group=fleetcheck
+WorkingDirectory={{ fleetcheck_install_dir }}
+ExecStart=/usr/bin/python3 -m fleetcheck serve --config /etc/fleetcheck/config.yml --port {{ fleetcheck_port }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/
+
+[Install]
+WantedBy=multi-user.target

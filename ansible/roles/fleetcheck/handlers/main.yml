@@ -1,0 +1,6 @@
+---
+- name: Restart fleetcheck
+  ansible.builtin.systemd_service:
+    name: fleetcheck
+    state: restarted
+    daemon_reload: true
